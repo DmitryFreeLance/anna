@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: anna-bot
+  datasource:
+    url: ${APP_DB_URL:jdbc:h2:file:./data/anna-bot;AUTO_SERVER=TRUE}
+    driver-class-name: org.h2.Driver
+    username: ${APP_DB_USERNAME:sa}
+    password: ${APP_DB_PASSWORD:}
+  h2:
+    console:
+      enabled: ${APP_H2_CONSOLE_ENABLED:false}
+      path: /h2-console
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+
+logging:
+  level:
+    ru.anna.bot: INFO
+
+app:
+  zone-id: ${APP_ZONE_ID:Europe/Moscow}
+  telegram:
+    bot-token: ${TELEGRAM_BOT_TOKEN:}
+    bot-username: ${TELEGRAM_BOT_USERNAME:}
+    private-chat-id: ${TELEGRAM_PRIVATE_CHAT_ID:0}
+    support-username: ${TELEGRAM_SUPPORT_USERNAME:AreninaAnna}
+    start-photo-path: ${TELEGRAM_START_PHOTO_PATH:assets/1.jpg}
+    admin-ids: ${TELEGRAM_ADMIN_IDS:}
+    poll-timeout-seconds: ${TELEGRAM_POLL_TIMEOUT_SECONDS:50}
+    poll-delay-ms: ${TELEGRAM_POLL_DELAY_MS:1500}
+    invite-link-expire-hours: ${TELEGRAM_INVITE_LINK_EXPIRE_HOURS:72}
+  yookassa:
+    enabled: ${YOOKASSA_ENABLED:true}
+    shop-id: ${YOOKASSA_SHOP_ID:}
+    secret-key: ${YOOKASSA_SECRET_KEY:}
+    return-url: ${YOOKASSA_RETURN_URL:}
+    webhook-path: ${YOOKASSA_WEBHOOK_PATH:/api/webhooks/yookassa}
+    vat-code: ${YOOKASSA_VAT_CODE:1}
+    tax-system-code: ${YOOKASSA_TAX_SYSTEM_CODE:}
+    payment-subject: ${YOOKASSA_PAYMENT_SUBJECT:service}
+    payment-mode: ${YOOKASSA_PAYMENT_MODE:full_payment}

@@ -1,0 +1,19 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+app:
+  telegram:
+    bot-token: ""
+    bot-username: testbot
+    private-chat-id: -1001234567890
+    poll-delay-ms: 1500
+    poll-timeout-seconds: 1
+  yookassa:
+    webhook-path: /api/webhooks/yookassa
