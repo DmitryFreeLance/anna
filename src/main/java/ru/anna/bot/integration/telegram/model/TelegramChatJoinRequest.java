@@ -2,14 +2,11 @@ package ru.anna.bot.integration.telegram.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record TelegramMessage(
-    @JsonProperty("message_id") Integer messageId,
-    TelegramUser from,
+public record TelegramChatJoinRequest(
     TelegramChat chat,
-    String text,
-    @JsonProperty("new_chat_members") List<TelegramUser> newChatMembers
+    TelegramUser from,
+    @JsonProperty("user_chat_id") Long userChatId
 ) {
 }

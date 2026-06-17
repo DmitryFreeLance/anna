@@ -19,8 +19,10 @@ import ru.anna.bot.domain.TelegramUserEntity;
 import ru.anna.bot.integration.telegram.TelegramApiClient;
 import ru.anna.bot.integration.telegram.TelegramException;
 import ru.anna.bot.integration.telegram.model.TelegramCallbackQuery;
+import ru.anna.bot.integration.telegram.model.TelegramChatJoinRequest;
 import ru.anna.bot.integration.telegram.model.TelegramMessage;
 import ru.anna.bot.integration.telegram.model.TelegramUpdate;
+import ru.anna.bot.integration.telegram.model.TelegramUser;
 import ru.anna.bot.integration.yookassa.YooKassaClient;
 import ru.anna.bot.integration.yookassa.YooKassaException;
 import ru.anna.bot.integration.yookassa.model.YooKassaPaymentResponse;
@@ -86,12 +88,21 @@ public class TelegramBotService {
             processMessage(update.message());
         } else if (update.callbackQuery() != null) {
             processCallback(update.callbackQuery());
+        } else if (update.chatJoinRequest() != null) {
+            processChatJoinRequest(update.chatJoinRequest());
         }
     }
 
     @Transactional
     public void processMessage(TelegramMessage message) {
-        if (message.chat() == null || !"private".equalsIgnoreCase(message.chat().type()) || message.from() == null) {
+        if (message.chat() == null) {
+            return;
+        }
+        if (!"private".equalsIgnoreCase(message.chat().type())) {
+            processManagedChatMessage(message);
+            return;
+        }
+        if (message.from() == null) {
             return;
         }
 
@@ -153,6 +164,35 @@ public class TelegramBotService {
         }
 
         sendText(user.getPrivateChatId(), "Выбери действие в меню ниже 👇");
+    }
+
+    @Transactional
+    public void processChatJoinRequest(TelegramChatJoinRequest joinRequest) {
+        if (joinRequest.chat() == null || joinRequest.from() == null) {
+            return;
+        }
+        if (!properties.getTelegram().getPrivateChatId().equals(joinRequest.chat().id())) {
+            return;
+        }
+
+        TelegramUserEntity user = userService.findByTelegramUserId(joinRequest.from().id()).orElse(null);
+        if (user != null && subscriptionService.hasActiveSubscription(user)) {
+            try {
+                telegramApiClient.approveChatJoinRequest(joinRequest.chat().id(), joinRequest.from().id());
+            } catch (Exception exception) {
+                log.warn("Failed to approve join request for user {}", joinRequest.from().id(), exception);
+            }
+            return;
+        }
+
+        try {
+            telegramApiClient.declineChatJoinRequest(joinRequest.chat().id(), joinRequest.from().id());
+        } catch (Exception exception) {
+            log.warn("Failed to decline join request for user {}", joinRequest.from().id(), exception);
+        }
+        if (user != null) {
+            sendText(user.getPrivateChatId(), "Активной подписки нет. Оформить доступ можно через /vip ✨");
+        }
     }
 
     @Transactional
@@ -226,8 +266,7 @@ public class TelegramBotService {
     }
 
     public void notifyPaymentCanceled(PaymentEntity payment) {
-        sendText(payment.getUser().getPrivateChatId(), "Платеж был отменен. Если хочешь, можно оформить его заново 👇");
-        sendVipMenu(payment.getUser().getPrivateChatId());
+        log.info("Payment {} was canceled", payment.getInternalPaymentId());
     }
 
     public void sendSubscriptionReminder(TelegramUserEntity user) {
@@ -451,6 +490,11 @@ public class TelegramBotService {
     }
 
     private void sendInviteMessage(TelegramUserEntity user, String text) {
+        try {
+            telegramApiClient.unbanChatMember(properties.getTelegram().getPrivateChatId(), user.getTelegramUserId());
+        } catch (Exception exception) {
+            log.warn("Failed to ensure user {} is not banned before issuing invite", user.getTelegramUserId(), exception);
+        }
         String inviteLink = telegramApiClient.createInviteLink(
             properties.getTelegram().getPrivateChatId(),
             "Подписка " + (user.getSubscriptionTariffCode() == null ? "чат" : user.getSubscriptionTariffCode().name())
@@ -460,6 +504,34 @@ public class TelegramBotService {
             text,
             telegramMarkupService.inviteKeyboard(inviteLink)
         );
+    }
+
+    private void processManagedChatMessage(TelegramMessage message) {
+        if (!properties.getTelegram().getPrivateChatId().equals(message.chat().id())) {
+            return;
+        }
+        if (message.newChatMembers() == null || message.newChatMembers().isEmpty()) {
+            return;
+        }
+
+        for (TelegramUser member : message.newChatMembers()) {
+            if (Boolean.TRUE.equals(member.isBot())) {
+                continue;
+            }
+            TelegramUserEntity user = userService.findByTelegramUserId(member.id()).orElse(null);
+            if (user != null && subscriptionService.hasActiveSubscription(user)) {
+                continue;
+            }
+            try {
+                telegramApiClient.banChatMember(message.chat().id(), member.id());
+                telegramApiClient.unbanChatMember(message.chat().id(), member.id());
+            } catch (Exception exception) {
+                log.warn("Failed to remove unauthorized user {} from managed chat", member.id(), exception);
+            }
+            if (user != null) {
+                sendText(user.getPrivateChatId(), "Без активной подписки войти в закрытый чат нельзя. Оформить доступ можно через /vip ✨");
+            }
+        }
     }
 
     private void sendText(Long chatId, String text) {

@@ -41,7 +41,7 @@ public class TelegramApiClient {
         Map<String, Object> request = Map.of(
             "offset", offset,
             "timeout", timeoutSeconds,
-            "allowed_updates", List.of("message", "callback_query")
+            "allowed_updates", List.of("message", "callback_query", "chat_join_request")
         );
         TelegramApiResponse<List<TelegramUpdate>> response = postJson(
             "/getUpdates",
@@ -98,7 +98,8 @@ public class TelegramApiClient {
     public String createInviteLink(Long chatId, String name) {
         Map<String, Object> request = Map.of(
             "chat_id", chatId,
-            "name", name
+            "name", name,
+            "creates_join_request", true
         );
         TelegramApiResponse<TelegramInviteLink> response = postJson(
             "/createChatInviteLink",
@@ -107,6 +108,18 @@ public class TelegramApiClient {
             }
         );
         return response.result().inviteLink();
+    }
+
+    public void approveChatJoinRequest(Long chatId, Long userId) {
+        Map<String, Object> request = Map.of("chat_id", chatId, "user_id", userId);
+        postJson("/approveChatJoinRequest", request, new ParameterizedTypeReference<TelegramApiResponse<Boolean>>() {
+        });
+    }
+
+    public void declineChatJoinRequest(Long chatId, Long userId) {
+        Map<String, Object> request = Map.of("chat_id", chatId, "user_id", userId);
+        postJson("/declineChatJoinRequest", request, new ParameterizedTypeReference<TelegramApiResponse<Boolean>>() {
+        });
     }
 
     public void banChatMember(Long chatId, Long userId) {

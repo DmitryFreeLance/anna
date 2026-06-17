@@ -7,6 +7,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public record TelegramUpdate(
     @JsonProperty("update_id") Long updateId,
     TelegramMessage message,
-    @JsonProperty("callback_query") TelegramCallbackQuery callbackQuery
+    @JsonProperty("callback_query") TelegramCallbackQuery callbackQuery,
+    @JsonProperty("chat_join_request") TelegramChatJoinRequest chatJoinRequest
 ) {
 }
