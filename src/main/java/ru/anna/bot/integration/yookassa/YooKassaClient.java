@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 import ru.anna.bot.config.AppProperties;
 import ru.anna.bot.domain.PaymentEntity;
 import ru.anna.bot.domain.TariffEntity;
@@ -60,8 +61,16 @@ public class YooKassaClient {
                 .body(request)
                 .retrieve()
                 .body(YooKassaPaymentResponse.class);
+        } catch (RestClientResponseException exception) {
+            log.error(
+                "Failed to create YooKassa payment. Status: {}, body: {}",
+                exception.getStatusCode(),
+                exception.getResponseBodyAsString(),
+                exception
+            );
+            throw new YooKassaException("Не удалось создать платеж в ЮKassa", exception);
         } catch (Exception exception) {
-            log.error("Failed to create YooKassa payment");
+            log.error("Failed to create YooKassa payment", exception);
             throw new YooKassaException("Не удалось создать платеж в ЮKassa", exception);
         }
     }
@@ -73,7 +82,17 @@ public class YooKassaClient {
                 .uri("/payments/{paymentId}", paymentId)
                 .retrieve()
                 .body(YooKassaPaymentResponse.class);
+        } catch (RestClientResponseException exception) {
+            log.error(
+                "Failed to fetch YooKassa payment {}. Status: {}, body: {}",
+                paymentId,
+                exception.getStatusCode(),
+                exception.getResponseBodyAsString(),
+                exception
+            );
+            throw new YooKassaException("Не удалось получить платеж из ЮKassa", exception);
         } catch (Exception exception) {
+            log.error("Failed to fetch YooKassa payment {}", paymentId, exception);
             throw new YooKassaException("Не удалось получить платеж из ЮKassa", exception);
         }
     }
