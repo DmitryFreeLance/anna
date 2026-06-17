@@ -188,6 +188,13 @@ public class TelegramBotService {
                 return;
             }
 
+            if (data.startsWith("payment:refresh:")) {
+                String internalPaymentId = data.substring("payment:refresh:".length());
+                handlePaymentRefresh(user, internalPaymentId);
+                telegramApiClient.answerCallbackQuery(callbackQuery.id(), "Обновляю ссылку...");
+                return;
+            }
+
             if (data.startsWith("admin:") && isAdmin(user.getTelegramUserId())) {
                 handleAdminCallback(user, data);
                 telegramApiClient.answerCallbackQuery(callbackQuery.id(), "Готово ✨");
@@ -334,6 +341,18 @@ public class TelegramBotService {
         sendText(user.getPrivateChatId(), "Платеж пока еще не завершен. После оплаты нажми кнопку проверки еще раз ✨");
     }
 
+    private void handlePaymentRefresh(TelegramUserEntity user, String internalPaymentId) {
+        try {
+            PaymentEntity oldPayment = paymentService.findByInternalPaymentId(internalPaymentId)
+                .orElseThrow(() -> new IllegalArgumentException("Payment not found"));
+            paymentService.markCanceledIfPending(oldPayment);
+            createPaymentAndSendLink(user, oldPayment.getTariffCode());
+        } catch (Exception exception) {
+            log.warn("Failed to refresh payment link for {}", internalPaymentId, exception);
+            sendText(user.getPrivateChatId(), PAYMENT_ERROR_TEXT);
+        }
+    }
+
     private void handleAdminCallback(TelegramUserEntity user, String data) {
         switch (data) {
             case "admin:tariffs" -> telegramApiClient.sendMessage(
@@ -416,6 +435,15 @@ public class TelegramBotService {
                 "Текущая подписка активна ✅\nДо: " +
                     FormattingUtils.formatDateTime(user.getSubscriptionEndsAt(), zoneId) +
                     "\nОсталось примерно дней: " + Math.max(daysLeft, 0)
+            );
+            return;
+        }
+        PaymentEntity latestPayment = paymentService.findLatestForUser(user).orElse(null);
+        if (latestPayment != null && latestPayment.getStatus() == PaymentStatus.PENDING) {
+            telegramApiClient.sendMessage(
+                user.getPrivateChatId(),
+                "У вас есть незавершенная оплата.\nЕсли ссылка истекла, обновите ее кнопкой ниже.",
+                telegramMarkupService.paymentKeyboard(latestPayment.getConfirmationUrl(), latestPayment.getInternalPaymentId())
             );
             return;
         }

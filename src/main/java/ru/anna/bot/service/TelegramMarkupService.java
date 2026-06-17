@@ -37,10 +37,13 @@ public class TelegramMarkupService {
     }
 
     public InlineKeyboardMarkup paymentKeyboard(String payUrl, String internalPaymentId) {
-        return new InlineKeyboardMarkup(List.of(
-            List.of(InlineKeyboardButton.url("💳 Оплатить", payUrl)),
-            List.of(InlineKeyboardButton.callback("✅ Проверить оплату", "payment:check:" + internalPaymentId))
-        ));
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (payUrl != null && !payUrl.isBlank()) {
+            rows.add(List.of(InlineKeyboardButton.url("💳 Оплатить", payUrl)));
+        }
+        rows.add(List.of(InlineKeyboardButton.callback("🔄 Обновить ссылку", "payment:refresh:" + internalPaymentId)));
+        rows.add(List.of(InlineKeyboardButton.callback("✅ Проверить оплату", "payment:check:" + internalPaymentId)));
+        return new InlineKeyboardMarkup(rows);
     }
 
     public InlineKeyboardMarkup adminMenu() {

@@ -90,6 +90,15 @@ public class PaymentService {
     }
 
     @Transactional
+    public PaymentEntity markCanceledIfPending(PaymentEntity payment) {
+        if (payment.getStatus() == PaymentStatus.PENDING) {
+            payment.setStatus(PaymentStatus.CANCELED);
+            return paymentRepository.save(payment);
+        }
+        return payment;
+    }
+
+    @Transactional
     public PaymentEntity save(PaymentEntity payment) {
         return paymentRepository.save(payment);
     }
