@@ -451,10 +451,9 @@ public class TelegramBotService {
     }
 
     private void sendInviteMessage(TelegramUserEntity user, String text) {
-        String inviteLink = telegramApiClient.createSingleUseInviteLink(
+        String inviteLink = telegramApiClient.createInviteLink(
             properties.getTelegram().getPrivateChatId(),
-            "Подписка " + (user.getSubscriptionTariffCode() == null ? "чат" : user.getSubscriptionTariffCode().name()),
-            Instant.now(clock).plus(properties.getTelegram().getInviteLinkExpireHours(), ChronoUnit.HOURS)
+            "Подписка " + (user.getSubscriptionTariffCode() == null ? "чат" : user.getSubscriptionTariffCode().name())
         );
         telegramApiClient.sendMessage(
             user.getPrivateChatId(),

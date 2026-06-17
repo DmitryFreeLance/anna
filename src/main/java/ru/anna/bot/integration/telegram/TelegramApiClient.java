@@ -95,12 +95,10 @@ public class TelegramApiClient {
         });
     }
 
-    public String createSingleUseInviteLink(Long chatId, String name, Instant expiresAt) {
+    public String createInviteLink(Long chatId, String name) {
         Map<String, Object> request = Map.of(
             "chat_id", chatId,
-            "name", name,
-            "expire_date", expiresAt.getEpochSecond(),
-            "member_limit", 1
+            "name", name
         );
         TelegramApiResponse<TelegramInviteLink> response = postJson(
             "/createChatInviteLink",
