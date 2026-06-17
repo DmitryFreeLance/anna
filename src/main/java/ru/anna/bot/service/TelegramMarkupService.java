@@ -83,9 +83,9 @@ public class TelegramMarkupService {
 
     private String priceLabel(TariffEntity tariff) {
         return switch (tariff.getCode()) {
-            case MONTH_1 -> "1️⃣ Мес " + FormattingUtils.formatMoney(tariff.getPriceMinor());
-            case MONTH_3 -> "3️⃣ 3 мес " + FormattingUtils.formatMoney(tariff.getPriceMinor());
-            case MONTH_6 -> "6️⃣ 6 мес " + FormattingUtils.formatMoney(tariff.getPriceMinor());
+            case MONTH_1 -> "1 месяц " + FormattingUtils.formatMoney(tariff.getPriceMinor());
+            case MONTH_3 -> "3 месяца " + FormattingUtils.formatMoney(tariff.getPriceMinor());
+            case MONTH_6 -> "6 месяцев " + FormattingUtils.formatMoney(tariff.getPriceMinor());
         };
     }
 }

@@ -137,8 +137,10 @@ public class TelegramApiClient {
         return new ReplyKeyboardMarkup(
             List.of(
                 List.of(new ru.anna.bot.integration.telegram.model.ReplyKeyboardButton("📚 Перейти к гайдам и тарифу")),
-                List.of(new ru.anna.bot.integration.telegram.model.ReplyKeyboardButton("💎 Подписка")),
-                List.of(new ru.anna.bot.integration.telegram.model.ReplyKeyboardButton("💬 Обратная связь"))
+                List.of(
+                    new ru.anna.bot.integration.telegram.model.ReplyKeyboardButton("💎 Подписка"),
+                    new ru.anna.bot.integration.telegram.model.ReplyKeyboardButton("💬 Обратная связь")
+                )
             ),
             true,
             true

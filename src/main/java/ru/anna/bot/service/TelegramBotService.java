@@ -22,6 +22,7 @@ import ru.anna.bot.integration.telegram.model.TelegramCallbackQuery;
 import ru.anna.bot.integration.telegram.model.TelegramMessage;
 import ru.anna.bot.integration.telegram.model.TelegramUpdate;
 import ru.anna.bot.integration.yookassa.YooKassaClient;
+import ru.anna.bot.integration.yookassa.YooKassaException;
 import ru.anna.bot.integration.yookassa.model.YooKassaPaymentResponse;
 import ru.anna.bot.util.EmailUtils;
 import ru.anna.bot.util.FormattingUtils;
@@ -39,6 +40,7 @@ public class TelegramBotService {
         """;
 
     private static final String VIP_TEXT = "🤍 Выберите желаемый для вас тарифный план:";
+    private static final String PAYMENT_ERROR_TEXT = "Ошибка платежа. Попробуйте чуть позже.";
 
     private final AppProperties properties;
     private final UserService userService;
@@ -118,7 +120,7 @@ public class TelegramBotService {
         }
 
         if (text.startsWith("/start")) {
-            sendMainMenu(user.getPrivateChatId());
+            sendStart(user.getPrivateChatId());
             return;
         }
 
@@ -144,7 +146,7 @@ public class TelegramBotService {
         if ("💬 Обратная связь".equals(text)) {
             telegramApiClient.sendMessage(
                 user.getPrivateChatId(),
-                "Напиши Анне в личные сообщения 💌",
+                "Для обратной связи используйте кнопку ниже 👇",
                 telegramMarkupService.feedbackKeyboard(properties.getTelegram().getSupportUsername())
             );
             return;
@@ -194,7 +196,7 @@ public class TelegramBotService {
         } catch (Exception exception) {
             log.error("Failed to handle callback {}", data, exception);
             telegramApiClient.answerCallbackQuery(callbackQuery.id(), "Не удалось обработать действие");
-            sendText(user.getPrivateChatId(), "Что-то пошло не так. Попробуй еще раз чуть позже.");
+            sendText(user.getPrivateChatId(), "Что-то пошло не так. Попробуйте чуть позже.");
             return;
         }
 
@@ -306,17 +308,27 @@ public class TelegramBotService {
     }
 
     private void handlePaymentCheck(TelegramUserEntity user, String internalPaymentId) {
-        PaymentEntity payment = paymentService.findByInternalPaymentId(internalPaymentId)
-            .orElseThrow(() -> new IllegalArgumentException("Payment not found"));
-        YooKassaPaymentResponse response = yooKassaClient.getPayment(payment.getYookassaPaymentId());
-        if ("succeeded".equalsIgnoreCase(response.status()) || Boolean.TRUE.equals(response.paid())) {
-            paymentService.markSucceeded(payment);
-            notifyPaymentSucceeded(payment, true);
+        try {
+            PaymentEntity payment = paymentService.findByInternalPaymentId(internalPaymentId)
+                .orElseThrow(() -> new IllegalArgumentException("Payment not found"));
+            YooKassaPaymentResponse response = yooKassaClient.getPayment(payment.getYookassaPaymentId());
+            if ("succeeded".equalsIgnoreCase(response.status()) || Boolean.TRUE.equals(response.paid())) {
+                paymentService.markSucceeded(payment);
+                notifyPaymentSucceeded(payment, true);
+                return;
+            }
+            if ("canceled".equalsIgnoreCase(response.status())) {
+                paymentService.markCanceled(payment);
+                notifyPaymentCanceled(payment);
+                return;
+            }
+        } catch (YooKassaException exception) {
+            log.warn("Payment status check failed for {}", internalPaymentId, exception);
+            sendText(user.getPrivateChatId(), PAYMENT_ERROR_TEXT);
             return;
-        }
-        if ("canceled".equalsIgnoreCase(response.status())) {
-            paymentService.markCanceled(payment);
-            notifyPaymentCanceled(payment);
+        } catch (Exception exception) {
+            log.warn("Unexpected payment status check error for {}", internalPaymentId, exception);
+            sendText(user.getPrivateChatId(), PAYMENT_ERROR_TEXT);
             return;
         }
         sendText(user.getPrivateChatId(), "Платеж пока еще не завершен. После оплаты нажми кнопку проверки еще раз ✨");
@@ -348,39 +360,48 @@ public class TelegramBotService {
     }
 
     private void createPaymentAndSendLink(TelegramUserEntity user, TariffCode code) {
-        TariffEntity tariff = tariffService.getRequired(code);
-        PaymentEntity payment = paymentService.createPendingPayment(user, tariff);
-        YooKassaPaymentResponse response = yooKassaClient.createPayment(payment, tariff, properties.getTelegram().getBotUsername());
-        payment = paymentService.updateFromCreateResponse(payment, response);
+        try {
+            TariffEntity tariff = tariffService.getRequired(code);
+            PaymentEntity payment = paymentService.createPendingPayment(user, tariff);
+            YooKassaPaymentResponse response = yooKassaClient.createPayment(payment, tariff, properties.getTelegram().getBotUsername());
+            payment = paymentService.updateFromCreateResponse(payment, response);
 
-        if (payment.getStatus() == PaymentStatus.SUCCEEDED) {
-            notifyPaymentSucceeded(payment, true);
-            return;
+            if (payment.getStatus() == PaymentStatus.SUCCEEDED) {
+                notifyPaymentSucceeded(payment, true);
+                return;
+            }
+
+            telegramApiClient.sendMessage(
+                user.getPrivateChatId(),
+                "Тариф: " + tariff.getTitle() + "\nСтоимость: " + FormattingUtils.formatMoney(tariff.getPriceMinor()) +
+                    "\nПосле оплаты я автоматически отправлю приглашение в закрытый чат 💒",
+                telegramMarkupService.paymentKeyboard(payment.getConfirmationUrl(), payment.getInternalPaymentId())
+            );
+        } catch (YooKassaException exception) {
+            log.warn("Payment creation failed for user {}", user.getTelegramUserId(), exception);
+            sendText(user.getPrivateChatId(), PAYMENT_ERROR_TEXT);
+        } catch (Exception exception) {
+            log.warn("Unexpected payment creation error for user {}", user.getTelegramUserId(), exception);
+            sendText(user.getPrivateChatId(), PAYMENT_ERROR_TEXT);
         }
-
-        telegramApiClient.sendMessage(
-            user.getPrivateChatId(),
-            "Тариф: " + tariff.getTitle() + "\nСтоимость: " + FormattingUtils.formatMoney(tariff.getPriceMinor()) +
-                "\nПосле оплаты я автоматически отправлю приглашение в закрытый чат 💒",
-            telegramMarkupService.paymentKeyboard(payment.getConfirmationUrl(), payment.getInternalPaymentId())
-        );
-    }
-
-    private void sendMainMenu(Long chatId) {
-        sendText(
-            chatId,
-            """
-            Меню открыто ✨
-
-            Доступные команды:
-            /vip - тарифы
-            /subscription - срок подписки
-            """
-        );
     }
 
     private void sendVipMenu(Long chatId) {
         telegramApiClient.sendMessage(chatId, VIP_TEXT, telegramMarkupService.tariffsKeyboard(tariffService.findAllOrdered()));
+    }
+
+    private void sendStart(Long chatId) {
+        try {
+            telegramApiClient.sendPhoto(
+                chatId,
+                properties.getTelegram().getStartPhotoPath(),
+                START_TEXT,
+                telegramMarkupService.tariffsKeyboard(tariffService.findAllOrdered())
+            );
+        } catch (Exception exception) {
+            log.warn("Failed to send start photo, falling back to text", exception);
+            telegramApiClient.sendMessage(chatId, START_TEXT, telegramMarkupService.tariffsKeyboard(tariffService.findAllOrdered()));
+        }
     }
 
     private void sendAdminMenu(Long chatId) {
