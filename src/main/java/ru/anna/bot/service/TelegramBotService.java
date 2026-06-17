@@ -188,9 +188,8 @@ public class TelegramBotService {
                 return;
             }
 
-            if (data.startsWith("payment:refresh:")) {
-                String internalPaymentId = data.substring("payment:refresh:".length());
-                handlePaymentRefresh(user, internalPaymentId);
+            if ("invite:refresh".equals(data)) {
+                handleInviteRefresh(user);
                 telegramApiClient.answerCallbackQuery(callbackQuery.id(), "Обновляю ссылку...");
                 return;
             }
@@ -218,17 +217,11 @@ public class TelegramBotService {
             return;
         }
 
-        String inviteLink = telegramApiClient.createSingleUseInviteLink(
-            properties.getTelegram().getPrivateChatId(),
-            "Подписка " + payment.getTariffTitle(),
-            Instant.now(clock).plus(properties.getTelegram().getInviteLinkExpireHours(), ChronoUnit.HOURS)
-        );
-        telegramApiClient.sendMessage(
-            user.getPrivateChatId(),
+        sendInviteMessage(
+            user,
             "Оплата прошла успешно ✅\nПодписка активна до " +
                 FormattingUtils.formatDateTime(user.getSubscriptionEndsAt(), zoneId) +
-                "\nНиже твоя ссылка в закрытый чат 💒",
-            telegramMarkupService.inviteKeyboard(inviteLink)
+                "\nНиже твоя ссылка в закрытый чат 💒"
         );
     }
 
@@ -341,16 +334,16 @@ public class TelegramBotService {
         sendText(user.getPrivateChatId(), "Платеж пока еще не завершен. После оплаты нажми кнопку проверки еще раз ✨");
     }
 
-    private void handlePaymentRefresh(TelegramUserEntity user, String internalPaymentId) {
-        try {
-            PaymentEntity oldPayment = paymentService.findByInternalPaymentId(internalPaymentId)
-                .orElseThrow(() -> new IllegalArgumentException("Payment not found"));
-            paymentService.markCanceledIfPending(oldPayment);
-            createPaymentAndSendLink(user, oldPayment.getTariffCode());
-        } catch (Exception exception) {
-            log.warn("Failed to refresh payment link for {}", internalPaymentId, exception);
-            sendText(user.getPrivateChatId(), PAYMENT_ERROR_TEXT);
+    private void handleInviteRefresh(TelegramUserEntity user) {
+        if (!subscriptionService.hasActiveSubscription(user)) {
+            sendText(user.getPrivateChatId(), "Активной подписки нет. Открыть тарифы можно через /vip ✨");
+            return;
         }
+        sendInviteMessage(
+            user,
+            "Вот обновленная ссылка в закрытый чат 💒\nПодписка активна до " +
+                FormattingUtils.formatDateTime(user.getSubscriptionEndsAt(), zoneId)
+        );
     }
 
     private void handleAdminCallback(TelegramUserEntity user, String data) {
@@ -429,12 +422,11 @@ public class TelegramBotService {
 
     private void sendSubscriptionStatus(TelegramUserEntity user) {
         if (subscriptionService.hasActiveSubscription(user)) {
-            long daysLeft = ChronoUnit.DAYS.between(Instant.now(clock), user.getSubscriptionEndsAt());
-            sendText(
-                user.getPrivateChatId(),
+            sendInviteMessage(
+                user,
                 "Текущая подписка активна ✅\nДо: " +
                     FormattingUtils.formatDateTime(user.getSubscriptionEndsAt(), zoneId) +
-                    "\nОсталось примерно дней: " + Math.max(daysLeft, 0)
+                    "\nНиже актуальная ссылка в закрытый чат."
             );
             return;
         }
@@ -442,7 +434,7 @@ public class TelegramBotService {
         if (latestPayment != null && latestPayment.getStatus() == PaymentStatus.PENDING) {
             telegramApiClient.sendMessage(
                 user.getPrivateChatId(),
-                "У вас есть незавершенная оплата.\nЕсли ссылка истекла, обновите ее кнопкой ниже.",
+                "У вас есть незавершенная оплата.",
                 telegramMarkupService.paymentKeyboard(latestPayment.getConfirmationUrl(), latestPayment.getInternalPaymentId())
             );
             return;
@@ -456,6 +448,19 @@ public class TelegramBotService {
             return;
         }
         sendText(user.getPrivateChatId(), "Активной подписки пока нет. Открыть тарифы можно через /vip ✨");
+    }
+
+    private void sendInviteMessage(TelegramUserEntity user, String text) {
+        String inviteLink = telegramApiClient.createSingleUseInviteLink(
+            properties.getTelegram().getPrivateChatId(),
+            "Подписка " + (user.getSubscriptionTariffCode() == null ? "чат" : user.getSubscriptionTariffCode().name()),
+            Instant.now(clock).plus(properties.getTelegram().getInviteLinkExpireHours(), ChronoUnit.HOURS)
+        );
+        telegramApiClient.sendMessage(
+            user.getPrivateChatId(),
+            text,
+            telegramMarkupService.inviteKeyboard(inviteLink)
+        );
     }
 
     private void sendText(Long chatId, String text) {

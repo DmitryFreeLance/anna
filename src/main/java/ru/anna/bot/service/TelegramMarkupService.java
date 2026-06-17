@@ -41,7 +41,6 @@ public class TelegramMarkupService {
         if (payUrl != null && !payUrl.isBlank()) {
             rows.add(List.of(InlineKeyboardButton.url("💳 Оплатить", payUrl)));
         }
-        rows.add(List.of(InlineKeyboardButton.callback("🔄 Обновить ссылку", "payment:refresh:" + internalPaymentId)));
         rows.add(List.of(InlineKeyboardButton.callback("✅ Проверить оплату", "payment:check:" + internalPaymentId)));
         return new InlineKeyboardMarkup(rows);
     }
@@ -74,6 +73,7 @@ public class TelegramMarkupService {
     public InlineKeyboardMarkup inviteKeyboard(String inviteUrl) {
         return new InlineKeyboardMarkup(List.of(
             List.of(InlineKeyboardButton.url("💒 Войти в закрытый чат", inviteUrl)),
+            List.of(InlineKeyboardButton.callback("🔄 Обновить ссылку", "invite:refresh")),
             List.of(InlineKeyboardButton.callback("✨ Продлить подписку", "start:open"))
         ));
     }
